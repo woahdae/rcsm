@@ -117,7 +117,7 @@ class Rcsm::Service
     # status of all *running* instances. There is no way to define what is
     # /supposed/ to be running ATM, though.
     statuses = []
-    self.instances.each {|instance| statuses << instance.to_s}
+    self.instances.each {|instance| statuses << instance.to_s(*options)}
     
     return statuses
   end
@@ -144,9 +144,9 @@ class Rcsm::Service
 
   ##### Class Methods #####
   
-  def self.status
+  def self.status(*options)
     statuses = {}
-    $nodes.each {|node| statuses[node.hostname] = node[self.to_sym].status }
+    $nodes.each {|node| statuses[node.hostname] = node[self.to_sym].status(*options) }
     
     return statuses
   end

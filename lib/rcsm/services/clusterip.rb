@@ -76,6 +76,7 @@ class Rcsm::Service::Clusterip < Rcsm::Service
     
     return status
   end
+  
 end
 
 class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
@@ -217,11 +218,18 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
       end
     end
     
-    return running ? "running" : status
+    if running
+      if options[:v] || options[:verbose]
+        status = "running, #{virtual_interface}, #{responsibility}"
+      else
+        status = "running"
+      end
+    end
+    return status
   end
   
-  def to_s
-    "#{ip}: #{status}"
+  def to_s(*status_options)
+    "#{ip}: #{status(*status_options)}"
   end
   
 end
