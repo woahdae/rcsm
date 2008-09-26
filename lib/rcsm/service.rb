@@ -151,6 +151,32 @@ class Rcsm::Service
     return statuses
   end
 
+  def self.start(*options)
+    $nodes.each do |node|
+      node[self.to_sym].instance(*options).start
+    end
+    true
+  end
+  
+  def self.stop(*options)
+    $nodes.each do |node|
+      node.clusterip.instance(*options).stop
+    end
+    true
+  end
+
+  # def self.method_missing(method, *options, &block)
+  #   results = {}
+  #   $nodes.each do |node|
+  #     results[node.hostname] = node[self.to_sym].instance(*options).send(method)
+  #     # or?
+  #     # results[node.hostname] = node[self.to_sym].instances.collect {|i| i.send(method, *options) }
+  #   end
+  #   
+  #   return results
+  # end
+  
+
   ##### Misc #####
 
   def to_s

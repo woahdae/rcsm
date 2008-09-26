@@ -20,7 +20,7 @@
 # between nodes.
 # 
 # It might be helpful to note that under the hood, this consists of managing 3
-# things: the virtual shared interface (by default eth0:0), the iptables entry,
+# things: the shared ip (by default on eth0), the iptables entry,
 # and the definition of responsibility (in /proc/net/ipt_CLUSTERIP/[ip address]).
 # 
 # Examples:
@@ -37,7 +37,6 @@
 class Rcsm::Service::Clusterip < Rcsm::Service
   DEFAULTS = {
     :interface => "eth0",
-    :virtual_interface => "eth0:0",
     :clustermac => "01:02:03:04:05:06",
     :hashmode => "sourceip"
   }
@@ -59,22 +58,6 @@ class Rcsm::Service::Clusterip < Rcsm::Service
     end
     
     return clusterips
-  end
-  
-  def self.start(ip, *options)
-    $nodes.each do |node|
-      node.clusterip.instance({:ip => ip}.merge(options.to_options_hash)).start
-    end
-    
-    return status
-  end
-
-  def self.stop(ip, *options)
-    $nodes.each do |node|
-      node.clusterip.instance({:ip => ip}.merge(options.to_options_hash)).stop
-    end
-    
-    return status
   end
   
 end
@@ -124,23 +107,22 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
   end
   
   ##
-  # Starts a Clusterip service by initializing the virtual shared interface 
-  # (usually eth0:0) and defining the iptables rule. Note that the latter also
+  # Starts a Clusterip service by initializing the shared ip on the interface 
+  # (default eth0) and defining the iptables rule. Note that the latter also
   # gives itself responsibility for itself (as defined by +local_node+ in the
   # configuration)
   def start
     if status != "running"
       commands = []
       commands << "sudo iptables -I INPUT -d #{ip} -i #{interface} -j CLUSTERIP --new --clustermac #{clustermac} --hashmode #{hashmode} --total-nodes #{total_nodes} --local-node #{@node.local_node}"
-      commands << "sudo ifconfig #{virtual_interface} #{ip}"
+      commands << "sudo ip address add #{ip} dev eth0"
       @node.exec(commands.join("; "))
     end
   end
   
   ##
   # Removes the entry in iptables (which also deletes the responsibility file in
-  # /proc/net/ipt_CLUSTERIP/[ip address]) and takes down the virtual shared
-  # interface.
+  # /proc/net/ipt_CLUSTERIP/[ip address]) and takes down the shared ip.
   # 
   # To simply remove request handling responsibility, you could do:
   # 
@@ -150,7 +132,7 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
   def stop
     commands = []
     commands << "sudo iptables -D INPUT -d #{ip} -i #{interface} -j CLUSTERIP --new --clustermac #{clustermac} --hashmode #{hashmode} --total-nodes #{total_nodes} --local-node #{@node.local_node}"
-    commands << "sudo ifconfig #{virtual_interface} down"
+    commands << "sudo ip address del #{ip} dev #{interface}"
     @node.exec(commands.join("; "))
   end
   
@@ -176,8 +158,8 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
   # Returns the status of the clusterip service.
   # === Parameters
   # [+options+] +:v+, +:verbose+ - give the status of individual components
-  #             of the CLUSTERIP implementation, i.e. the virtual interface
-  #             (usually eth0:0), the iptables entry, and the defined
+  #             of the CLUSTERIP implementation, i.e. the interface
+  #             (usually eth0), the iptables entry, and the defined
   #             responsibility
   # === Returns
   # "running" if all three things are up (it has to be responsible for
@@ -199,11 +181,11 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
       end
     end
     
-    ip_addy_status = @node.exec("sudo ifconfig | grep #{ip}")
-    if !(ip_addy_status =~ /inet addr:#{ip}/)
+    ip_addy_status = @node.exec("ip address show #{interface} | grep #{ip}")
+    if !(ip_addy_status =~ /inet #{ip}/)
       running = false
       if options[:v] || options[:verbose]
-        status += "not running: interface #{virtual_interface}\n"
+        status += "not running: #{ip} on #{interface}\n"
       else
         return "not running"
       end
@@ -220,7 +202,7 @@ class Rcsm::Service::ClusteripInstance < Rcsm::ServiceInstance
     
     if running
       if options[:v] || options[:verbose]
-        status = "running, #{virtual_interface}, #{responsibility}"
+        status = "running, #{interface}, #{responsibility}"
       else
         status = "running"
       end
